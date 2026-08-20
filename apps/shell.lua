@@ -1,57 +1,37 @@
 local app={name='Shell',icon='>_'}
 function app.run(ctx)
- local d,u,i=ctx.disp,ctx.ui,ctx.input
- local keyboard=nil
- pcall(function() keyboard=dofile('/os/keyboard.lua') end)
- local settings=ctx.settings
- local buf=''
- local lines={'TouchOS Shell'}
- local function drawKeyboard()
-  if not keyboard or not settings.keyboardMonitor then return end
-  if settings.keyboardMonitor==settings.screenMonitor then return end
-  local m=peripheral.wrap(settings.keyboardMonitor)
-  if not m then return end
-  if keyboard.isLargeEnough and not keyboard.isLargeEnough(m) then return end
-  if keyboard.draw then pcall(keyboard.draw,m) end
- end
+ local d,u,i=ctx.disp,ctx.ui,ctx.input local buf='' local lines={'TouchOS Shell','Ready'}
  local function draw()
-  local w,h=d.getSize()
-  u.clear(d)
-  u.center(d,1,1,w,'Shell',u.theme.highlight)
-  local max=math.max(1,h-6)
-  local start=math.max(1,#lines-max+1)
-  for n=start,#lines do u.text(d,1,n-start+3,lines[n]) end
-  u.text(d,1,math.max(1,h-3),'> '..buf)
-  local bw=math.max(1,math.floor(w/2))
-  u.button(d,{x=1,y=math.max(1,h-2),w=bw,h=2,label='Back'},false)
-  u.button(d,{x=bw+1,y=math.max(1,h-2),w=w-bw,h=2,label='Run'},false)
-  drawKeyboard()
+  local w,h=d.getSize(); u.clear(d); u.header(d,'Shell','Command line')
+  local max=math.max(1,h-7); local first=math.max(1,#lines-max+1)
+  for n=first,#lines do u.text(d,2,n-first+4,lines[n]) end
+  u.fill(d,1,h-3,w,1,u.theme.surface); u.text(d,2,h-3,'> '..u.truncate(buf,math.max(0,w-3)),colors.white,u.theme.surface)
+  local bw=math.floor(w/2); u.button(d,{x=1,y=h-2,w=bw,h=2,label='BACK'},false); u.button(d,{x=bw+1,y=h-2,w=w-bw,h=2,label='RUN'},true)
+  u.status(d,'Touch keyboard or physical keyboard',ctx.settings.keyboardMonitor or 'none')
  end
- local function runCommand()
+ local function drawKeyboard()
+  local name=ctx.settings.keyboardMonitor
+  if not name or name==ctx.settings.screenMonitor then return end
+  local m=peripheral.wrap(name)
+  if m then local kb=dofile('/os/keyboard.lua'); if kb.isLargeEnough(m) then kb.draw(m) end end
+ end
+ local function run()
   if buf=='' then return end
-  local cmd=buf
-  buf=''
-  lines[#lines+1]='> '..cmd
-  local old=term.redirect(d)
-  local ok,err=pcall(shell.run,cmd)
-  term.redirect(old)
+  local cmd=buf; buf=''; lines[#lines+1]='> '..cmd
+  local old=term.redirect(d); local ok,err=pcall(shell.run,cmd); term.redirect(old)
   if not ok then lines[#lines+1]='Error: '..tostring(err) end
  end
- draw()
+ draw(); drawKeyboard()
  while true do
   local e=i.pull()
   if e.kind=='back' then return
   elseif e.kind=='backspace' then buf=buf:sub(1,-2); draw()
   elseif e.kind=='char' then buf=buf..e.char; draw()
   elseif e.kind=='paste' then buf=buf..e.text; draw()
-  elseif e.kind=='activate' then runCommand(); draw()
   elseif e.kind=='clear' then buf=''; draw()
-  elseif e.kind=='touch' then
-   local w,h=d.getSize()
-   if e.y>=h-2 then
-    if e.x<=math.floor(w/2) then return else runCommand(); draw() end
-   end
-  elseif e.kind=='resize' then draw() end
+  elseif e.kind=='activate' then run(); draw(); drawKeyboard()
+  elseif e.kind=='touch' then local w,h=d.getSize(); if e.y>=h-2 then if e.x<=math.floor(w/2) then return else run(); draw() end end
+  elseif e.kind=='resize' then draw(); drawKeyboard() end
  end
 end
 return app
