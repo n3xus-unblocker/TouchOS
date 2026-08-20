@@ -1,6 +1,6 @@
--- TouchOS Setup v3
+-- TouchOS Setup v4
 -- Downloads and validates the complete release before wiping the computer.
--- Then performs a clean install and reboots.
+-- The virtual /disk and /rom filesystems are never touched.
 
 local BASE = 'https://raw.githubusercontent.com/n3xus-unblocker/TouchOS/main/'
 local FILES = {
@@ -135,36 +135,46 @@ end
 
 header('TouchOS Setup', 'Reformatting')
 writeAt(2, 5, 'Removing user files and old TouchOS files...', colors.red)
-writeAt(2, 6, '/disk and /rom will be skipped.', colors.yellow)
+writeAt(2, 6, '/disk and /rom are explicitly excluded.', colors.yellow)
 
 local all = fs.list('/')
+local deletable = {}
+local skipped = {}
 local deleteFailed = {}
-local deleted = 0
-local skipped = 0
 
-for i, name in ipairs(all) do
-    if PROTECTED[name] then
-        skipped = skipped + 1
+for _, name in ipairs(all) do
+    local normalized = tostring(name):lower()
+    if PROTECTED[normalized] then
+        skipped[#skipped + 1] = normalized
     else
-        local ok, err = pcall(fs.delete, '/' .. name)
-        if not ok then
-            deleteFailed[#deleteFailed + 1] = '/' .. name .. ': ' .. tostring(err)
-        else
-            deleted = deleted + 1
-        end
+        deletable[#deletable + 1] = name
     end
-    bar(H - 2, i, #all, colors.red)
+end
+
+for i, name in ipairs(deletable) do
+    local ok, result = pcall(fs.delete, '/' .. name)
+
+    if not ok then
+        deleteFailed[#deleteFailed + 1] = '/' .. name .. ': ' .. tostring(result)
+    elseif result == false then
+        deleteFailed[#deleteFailed + 1] = '/' .. name .. ': delete operation failed'
+    end
+
+    bar(H - 2, i, #deletable, colors.red)
 end
 
 if #deleteFailed > 0 then
     clear(colors.black)
     centered(3, 'WIPE FAILED', colors.red)
-    writeAt(2, 5, 'Some files could not be deleted:', colors.yellow)
+    writeAt(2, 5, 'Some non-protected files could not be deleted:', colors.yellow)
     local y = 6
     for _, err in ipairs(deleteFailed) do
         if y >= H then break end
         writeAt(2, y, err, colors.red)
         y = y + 1
+    end
+    if H >= y + 1 then
+        writeAt(2, y + 1, 'Protected /disk and /rom were not touched.', colors.lime)
     end
     return
 end
