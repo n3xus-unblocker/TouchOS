@@ -1,8 +1,30 @@
-local app={name='Settings',icon='⚙'}
+local app={name='Settings',icon='Settings'}
 function app.run(ctx)
- local d,u,i=ctx.disp,ctx.ui,ctx.input local s=ctx.settings local w,h=d.getSize() local sel=1
- local function draw() w,h=d.getSize() u.clear(d) u.center(d,1,1,w,'Settings',u.theme.highlight) u.text(d,2,3,'Screen: '..tostring(s.screenMonitor or 'auto')) u.text(d,2,4,'Keyboard: '..tostring(s.keyboardMonitor or 'off')) u.text(d,2,5,'Scale: '..tostring(s.textScale or 1)) local bs={{x=2,y=7,w=math.min(14,w-3),h=2,label='Monitor setup',id='monitor'},{x=2,y=10,w=math.min(14,w-3),h=2,label='Scale +',id='up'},{x=18,y=10,w=math.min(14,math.max(1,w-18)),h=2,label='Scale -',id='down'},{x=2,y=13,w=math.min(14,w-3),h=2,label='Back',id='back'}} for n,b in ipairs(bs) do u.button(d,b,n==sel) end return bs end
+ local d,u,i=ctx.disp,ctx.ui,ctx.input local s=ctx.settings local sel=1
+ local function draw()
+  local w,h=d.getSize() u.clear(d) u.center(d,1,1,w,'Settings',u.theme.highlight)
+  u.text(d,2,3,'Screen: '..tostring(s.screenMonitor or 'auto'))
+  u.text(d,2,4,'Keyboard: '..tostring(s.keyboardMonitor or 'off'))
+  u.text(d,2,5,'Scale: '..tostring(s.textScale or 1))
+  local bw=math.max(10,math.min(20,w-4)) local x=2
+  local bs={{x=x,y=7,w=bw,h=2,label='Monitor Setup',id='monitor'},{x=x,y=10,w=bw,h=2,label='Scale +',id='up'},{x=x,y=13,w=bw,h=2,label='Scale -',id='down'},{x=x,y=16,w=bw,h=2,label='Back',id='back'}}
+  if h<18 then bs={{x=x,y=7,w=bw,h=2,label='Monitor Setup',id='monitor'},{x=x,y=10,w=bw,h=2,label='Scale +',id='up'},{x=x,y=13,w=bw,h=2,label='Scale -',id='down'},{x=x,y=math.max(1,h-1),w=bw,h=2,label='Back',id='back'}} end
+  for n,b in ipairs(bs) do u.button(d,b,n==sel) end return bs
+ end
  local bs=draw()
- while true do local e=i.pull() if e.kind=='back' then return elseif e.kind=='resize' then bs=draw() elseif e.kind=='move' then if e.dir=='down' then sel=math.min(#bs,sel+1) elseif e.dir=='up' then sel=math.max(1,sel-1) end bs=draw() elseif e.kind=='touch' then local _,n=u.hit(bs,e.x,e.y) if n then sel=n end e={kind='activate'} end if e.kind=='activate' then local b=bs[sel] if b.id=='back' then return elseif b.id=='monitor' then local ok,a=pcall(dofile,'/apps/monitor.lua') if ok and a.run then a.run(ctx) end elseif b.id=='up' then s.textScale=math.min(5,(s.textScale or 1)+.5) if d.setTextScale then d.setTextScale(s.textScale) end ctx.saveSettings(s) elseif b.id=='down' then s.textScale=math.max(.5,(s.textScale or 1)-.5) if d.setTextScale then d.setTextScale(s.textScale) end ctx.saveSettings(s) end bs=draw() end end
+ while true do
+  local e=i.pull()
+  if e.kind=='back' then return
+  elseif e.kind=='resize' then bs=draw()
+  elseif e.kind=='move' then if e.dir=='down' or e.dir=='right' then sel=u.clamp(sel+1,1,#bs) elseif e.dir=='up' or e.dir=='left' then sel=u.clamp(sel-1,1,#bs) end bs=draw()
+  elseif e.kind=='touch' then local _,n=u.hit(bs,e.x,e.y) if n then sel=n e={kind='activate'} end end
+  if e.kind=='activate' then
+   local b=bs[sel]
+   if b.id=='back' then return
+   elseif b.id=='monitor' then local ok,a=pcall(dofile,'/apps/monitor.lua') if ok and a and a.run then a.run(ctx) end bs=draw()
+   elseif b.id=='up' then s.textScale=math.min(5,(s.textScale or 1)+.5) if d.setTextScale then d.setTextScale(s.textScale) end ctx.saveSettings(s) bs=draw()
+   elseif b.id=='down' then s.textScale=math.max(.5,(s.textScale or 1)-.5) if d.setTextScale then d.setTextScale(s.textScale) end ctx.saveSettings(s) bs=draw() end
+  end
+ end
 end
 return app
