@@ -63,6 +63,10 @@ function ui.header(d, title, subtitle)
     end
 end
 
+function ui.panel(d, x, y, w, h, bg)
+    ui.fill(d, x, y, w, h, bg or ui.theme.surface)
+end
+
 function ui.button(d, b, selected, disabled)
     local bg
     local fg
