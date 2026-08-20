@@ -1,21 +1,7 @@
 local kb={}
 kb.rows={{'q','w','e','r','t'},{'y','u','i','o','p'},{'a','s','d','f','g'},{'h','j','k','l','z'},{'x','c','v','b','n'},{'m','SPACE','BACK','ENTER','CLR'}}
-local function metrics(m)
- local w,h=m.getSize() local rows=#kb.rows local gap=1 local keyW=math.max(3,math.floor((w-gap*4)/5)) local keyH=math.max(1,math.floor(h/rows)) return w,h,keyW,keyH,gap end
-function kb.draw(m)
- if not m then return end
- local w,h,keyW,keyH,gap=metrics(m) m.setBackgroundColor(colors.black) m.setTextColor(colors.white) m.clear()
- for r,row in ipairs(kb.rows) do
-  local y=(r-1)*keyH+1
-  for c,label in ipairs(row) do
-   local x=(c-1)*(keyW+gap)+1
-   if x<=w then local ww=math.min(keyW,w-x+1) local hh=math.min(keyH,h-y+1) m.setBackgroundColor(colors.blue) m.setTextColor(colors.white) for yy=y,y+hh-1 do m.setCursorPos(x,yy) m.write(string.rep(' ',ww)) end local shown=label=='SPACE' and 'SPACE' or label local tx=x+math.max(0,math.floor((ww-#shown)/2)) local ty=y+math.floor((hh-1)/2) m.setCursorPos(tx,ty) m.write(shown:sub(1,ww)) end
-  end
- end
-end
-function kb.touch(m,x,y)
- if not m then return nil end local w,h,keyW,keyH,gap=metrics(m) local r=math.floor((y-1)/keyH)+1 local c=math.floor((x-1)/(keyW+gap))+1 local row=kb.rows[r] local label=row and row[c] if not label then return nil end
- if label=='SPACE' then return {kind='char',char=' '} elseif label=='BACK' then return {kind='backspace'} elseif label=='ENTER' then return {kind='activate'} elseif label=='CLR' then return {kind='clear'} else return {kind='char',char=label} end
-end
-function kb.isLargeEnough(m) if not m then return false end local w,h=m.getSize() return w>=20 and h>=8 end
+local function metrics(m) local w,h=m.getSize() local gap=1 local keyW=math.max(3,math.floor((w-gap*4)/5)) local keyH=math.max(2,math.floor(h/#kb.rows)) return w,h,keyW,keyH,gap end
+function kb.draw(m) if not m then return end local w,h,keyW,keyH,gap=metrics(m) m.setBackgroundColor(colors.black) m.setTextColor(colors.white) m.clear() for r,row in ipairs(kb.rows) do local y=(r-1)*keyH+1 for c,label in ipairs(row) do local x=(c-1)*(keyW+gap)+1 if x<=w then local ww=math.min(keyW,w-x+1) local hh=math.min(keyH,h-y+1) m.setBackgroundColor(colors.blue) for yy=y,y+hh-1 do m.setCursorPos(x,yy) m.write(string.rep(' ',ww)) end m.setTextColor(colors.white) local shown=label=='SPACE' and 'SPACE' or label local tx=x+math.max(0,math.floor((ww-#shown)/2)) local ty=y+math.floor((hh-1)/2) m.setCursorPos(tx,ty) m.write(shown:sub(1,ww)) end end end end
+function kb.touch(m,x,y) if not m then return nil end local w,h,keyW,keyH,gap=metrics(m) local r=math.floor((y-1)/keyH)+1 local c=math.floor((x-1)/(keyW+gap))+1 local row=kb.rows[r] local label=row and row[c] if not label then return nil end if label=='SPACE' then return {kind='char',char=' '} elseif label=='BACK' then return {kind='backspace'} elseif label=='ENTER' then return {kind='activate'} elseif label=='CLR' then return {kind='clear'} else return {kind='char',char=label} end end
+function kb.isLargeEnough(m) if not m then return false end local w,h=m.getSize() return w>=20 and h>=12 end
 return kb
