@@ -1,25 +1,8 @@
-local app={name='Printer',icon='Printer'}
+local app={name='Printer',icon='Print'}
 function app.run(ctx)
- local d,u,i=ctx.disp,ctx.ui,ctx.input local printers={} local sel=1 local text=''
- local function scan() printers={} for _,s in ipairs(peripheral.getNames()) do if peripheral.getType(s)=='printer' then printers[#printers+1]=s end end end
- local function draw()
-  scan() local w,h=d.getSize() u.clear(d) u.center(d,1,1,w,'Printer',u.theme.highlight)
-  if #printers==0 then u.center(d,1,5,w,'No printer found',colors.red) u.center(d,1,7,w,'Attach a CC printer',u.theme.muted) return end
-  u.text(d,2,3,'Printer: '..printers[sel]) u.text(d,2,5,'Text: '..(text=='' and '(empty)' or text))
-  local bw=math.max(10,math.floor((w-6)/2)) u.button(d,{x=2,y=8,w=bw,h=2,label='Print'},false) u.button(d,{x=4+bw,y=8,w=bw,h=2,label='Clear'},false)
-  u.text(d,2,11,'Type using the physical or touch keyboard',u.theme.muted)
- end
- local function printPage() local p=peripheral.wrap(printers[sel]) if not p then return end if p.newPage and p.endPage and p.write then p.newPage() if p.setPageTitle then p.setPageTitle('TouchOS') end p.write(text) p.endPage() end text='' end
+ local d,u,i=ctx.disp,ctx.ui,ctx.input local printer=nil for _,n in ipairs(peripheral.getNames()) do if peripheral.getType(n)=='printer' then printer=peripheral.wrap(n) break end end local text='' local status=printer and 'Printer ready' or 'No printer connected'
+ local function draw() local w,h=d.getSize() u.clear(d) u.center(d,1,1,w,'Printer',u.theme.highlight) u.text(d,2,3,status,u.theme.muted) u.fill(d,2,5,w-2,math.max(1,h-9),u.theme.bg) local lines={} for line in (text..'\n'):gmatch('(.-)\n') do lines[#lines+1]=line end for n=1,math.min(#lines,h-9) do u.text(d,2,4+n,lines[n]:sub(1,w-3)) end local bw=math.floor(w/3) u.button(d,{x=1,y=h-2,w=bw,h=2,label='Print'},false) u.button(d,{x=bw+1,y=h-2,w=bw,h=2,label='Clear'},false) u.button(d,{x=bw*2+1,y=h-2,w=w-bw*2,h=2,label='Back'},false) end
  draw()
- while true do
-  local e=i.pull()
-  if e.kind=='back' then return
-  elseif e.kind=='resize' then draw()
-  elseif e.kind=='char' then text=text..e.char draw()
-  elseif e.kind=='key' then if e.key==keys.backspace then text=text:sub(1,-2) draw() end
-  elseif e.kind=='touch' then
-   local w,h=d.getSize() if #printers>0 and e.y>=8 and e.y<10 then local bw=math.max(10,math.floor((w-6)/2)) if e.x>=2 and e.x<2+bw then printPage() elseif e.x>=4+bw then text='' end draw() end
-  end
- end
+ while true do local e=i.pull() if e.kind=='back' then return elseif e.kind=='char' then text=text..e.char draw() elseif e.kind=='paste' then text=text..e.text draw() elseif e.kind=='backspace' then text=text:sub(1,-2) draw() elseif e.kind=='resize' then draw() elseif e.kind=='touch' then local w,h=d.getSize() local bw=math.floor(w/3) if e.y>=h-2 then if e.x<=bw then if printer then local ok,err=pcall(function() printer.newPage() printer.setPageTitle('TouchOS') for line in (text..'\n'):gmatch('(.-)\n') do printer.write(line) end printer.endPage() end) status=ok and 'Printed' or 'Print failed: '..tostring(err) else status='No printer connected' end elseif e.x<=bw*2 then text='' else return end draw() end elseif e.kind=='activate' then if printer then pcall(function() printer.newPage() for line in (text..'\n'):gmatch('(.-)\n') do printer.write(line) end printer.endPage() end draw() end end
 end
 return app
