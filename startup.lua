@@ -69,6 +69,8 @@ if display.setTextScale then
     pcall(display.setTextScale, settings.textScale or 1)
 end
 
+input.setKeyboardMonitor(settings.keyboardMonitor)
+
 local function keyboardDisplay()
     if not isMonitor(settings.keyboardMonitor)
     or settings.keyboardMonitor == settings.screenMonitor then
@@ -245,6 +247,7 @@ local function context()
         saveSettings = function(s)
             settings = s
             saveSettings(s)
+            input.setKeyboardMonitor(settings.keyboardMonitor)
             refreshKeyboard()
         end
     }
