@@ -259,8 +259,10 @@ local function layout()
     local rows = math.max(1, math.floor(availableH / (cellH + 1)))
     local pageSize = cols * rows
     local pages = math.max(1, math.ceil(#apps / pageSize))
+
     page = ui.clamp(page, 1, pages)
     selected = ui.clamp(selected or 1, 1, math.max(1, #apps))
+
     return w, h, cols, rows, cellH, gap, pageSize, pages
 end
 
@@ -286,17 +288,16 @@ local function buildButtons()
         }
     end
 
-    return buttons, pages
+    return buttons, pages, pageSize
 end
 
 local function drawHome()
     local w, h = display.getSize()
-    local _, _, _, _, _, _, _, pages = layout()
+    local buttons, pages = buildButtons()
 
     ui.clear(display)
     ui.header(display, 'TouchOS', tostring(#apps) .. ' apps')
 
-    local buttons = buildButtons()
     for _, b in ipairs(buttons) do
         ui.button(display, b, b.id == selected)
     end
@@ -305,8 +306,8 @@ local function drawHome()
         local navY = math.max(1, h - 3)
         local half = math.max(1, math.floor(w / 2))
 
-        ui.button(disp, { x = 1, y = navY, w = half, h = 2, label = 'PREV' }, page == 1)
-        ui.button(disp, { x = half + 1, y = navY, w = w - half, h = 2, label = 'NEXT' }, page == pages)
+        ui.button(display, { x = 1, y = navY, w = half, h = 2, label = 'PREV' }, page == 1)
+        ui.button(display, { x = half + 1, y = navY, w = w - half, h = 2, label = 'NEXT' }, page == pages)
         ui.status(display, 'Tap an app', 'Page ' .. page .. '/' .. pages)
     else
         ui.status(display, 'Tap an app', 'TouchOS')
@@ -344,26 +345,25 @@ while true do
 
             buttons, pages = drawHome()
         else
-            local w, h = display.getSize()
-            local _, _, _, _, _, _, _, currentPages = layout()
+            local w, h, _, _, _, _, pageSize, currentPages = layout()
 
             if currentPages > 1 and e.y >= h - 3 then
                 local half = math.max(1, math.floor(w / 2))
 
                 if e.x <= half and page > 1 then
                     page = page - 1
-                    selected = (page - 1) * layout() + 1
+                    selected = (page - 1) * pageSize + 1
                     buttons, pages = drawHome()
                 elseif e.x > half and page < currentPages then
                     page = page + 1
-                    selected = (page - 1) * layout() + 1
+                    selected = (page - 1) * pageSize + 1
                     buttons, pages = drawHome()
                 end
             end
         end
 
     elseif e.kind == 'move' and selected then
-        local w, h, cols, rows, cellH, gap, pageSize, currentPages = layout()
+        local _, _, cols, _, _, _, pageSize, currentPages = layout()
 
         if e.dir == 'left' then
             selected = math.max(1, selected - 1)
@@ -375,8 +375,7 @@ while true do
             selected = math.min(#apps, selected + cols)
         end
 
-        local selectedPage = math.floor((selected - 1) / pageSize) + 1
-        page = ui.clamp(selectedPage, 1, currentPages)
+        page = ui.clamp(math.floor((selected - 1) / pageSize) + 1, 1, currentPages)
         buttons, pages = drawHome()
 
     elseif e.kind == 'activate' and selected and apps[selected] then
