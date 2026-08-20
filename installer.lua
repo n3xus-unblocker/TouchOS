@@ -16,6 +16,11 @@ local FILES = {
     'apps/monitor.lua'
 }
 
+local PROTECTED = {
+    disk = true,
+    rom = true
+}
+
 local W, H = term.getSize()
 
 local function clear(bg)
@@ -65,7 +70,7 @@ end
 
 header('TouchOS Setup', 'Fresh install')
 writeAt(2, 5, 'This installer performs a COMPLETE filesystem wipe.', colors.red)
-writeAt(2, 6, 'Nothing currently on this computer will survive.', colors.yellow)
+writeAt(2, 6, 'The virtual /disk and /rom filesystems are protected.', colors.yellow)
 writeAt(2, 8, 'Before wiping, TouchOS will download and validate', colors.white)
 writeAt(2, 9, 'every release file so a network failure cannot leave', colors.white)
 writeAt(2, 10, 'the computer half-installed.', colors.white)
@@ -129,15 +134,24 @@ if #failed > 0 then
 end
 
 header('TouchOS Setup', 'Reformatting')
-writeAt(2, 5, 'All existing files are being removed...', colors.red)
+writeAt(2, 5, 'Removing user files and old TouchOS files...', colors.red)
+writeAt(2, 6, '/disk and /rom will be skipped.', colors.yellow)
 
 local all = fs.list('/')
 local deleteFailed = {}
+local deleted = 0
+local skipped = 0
 
 for i, name in ipairs(all) do
-    local ok, err = pcall(fs.delete, '/' .. name)
-    if not ok then
-        deleteFailed[#deleteFailed + 1] = '/' .. name .. ': ' .. tostring(err)
+    if PROTECTED[name] then
+        skipped = skipped + 1
+    else
+        local ok, err = pcall(fs.delete, '/' .. name)
+        if not ok then
+            deleteFailed[#deleteFailed + 1] = '/' .. name .. ': ' .. tostring(err)
+        else
+            deleted = deleted + 1
+        end
     end
     bar(H - 2, i, #all, colors.red)
 end
