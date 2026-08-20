@@ -1,5 +1,6 @@
--- TouchOS Setup v2
--- Full wipe + fresh install
+-- TouchOS Setup v3
+-- Downloads and validates the complete release before wiping the computer.
+-- Then performs a clean install and reboots.
 
 local BASE = 'https://raw.githubusercontent.com/n3xus-unblocker/TouchOS/main/'
 local FILES = {
@@ -17,129 +18,199 @@ local FILES = {
 
 local W, H = term.getSize()
 
-local function clear()
-    term.setBackgroundColor(colors.black)
+local function clear(bg)
+    term.setBackgroundColor(bg or colors.black)
     term.setTextColor(colors.white)
     term.clear()
     term.setCursorPos(1, 1)
 end
 
-local function title()
+local function writeAt(x, y, text, fg, bg)
+    text = tostring(text or ''):sub(1, math.max(0, W - x + 1))
+    term.setCursorPos(x, y)
+    if bg then term.setBackgroundColor(bg) end
+    if fg then term.setTextColor(fg) end
+    term.write(text)
+end
+
+local function centered(y, text, fg, bg)
+    text = tostring(text or '')
+    local x = math.max(1, math.floor((W - #text) / 2) + 1)
+    writeAt(x, y, text, fg, bg)
+end
+
+local function header(title, subtitle)
     clear()
     term.setBackgroundColor(colors.blue)
-    term.setTextColor(colors.white)
     for y = 1, math.min(3, H) do
         term.setCursorPos(1, y)
         term.write(string.rep(' ', W))
     end
-    term.setCursorPos(1, 1)
-    local name = 'TouchOS Setup'
-    term.setCursorPos(math.max(1, math.floor((W - #name) / 2) + 1), 1)
-    term.write(name)
-    term.setCursorPos(1, 2)
-    term.write(string.rep(' ', W))
-    term.setCursorPos(math.max(1, math.floor((W - 14) / 2) + 1), 2)
-    term.write('Fresh Install')
+    centered(1, title, colors.white, colors.blue)
+    if subtitle and H >= 2 then
+        centered(2, subtitle, colors.lightBlue, colors.blue)
+    end
     term.setBackgroundColor(colors.black)
-    term.setCursorPos(1, 5)
 end
 
-local function line(text, color)
-    term.setTextColor(color or colors.white)
-    term.write(tostring(text):sub(1, W))
-    term.setCursorPos(1, math.min(H, select(2, term.getCursorPos()) + 1))
-end
-
-local function progress(done, total)
-    local width = math.max(10, W - 4)
+local function bar(y, done, total, fg)
+    if H < y then return end
+    local width = math.max(1, W - 4)
     local filled = math.floor(width * done / math.max(1, total))
-    term.setBackgroundColor(colors.gray)
-    term.setCursorPos(3, H - 2)
-    term.write(string.rep(' ', width))
-    term.setBackgroundColor(colors.cyan)
-    term.setCursorPos(3, H - 2)
-    term.write(string.rep(' ', filled))
-    term.setBackgroundColor(colors.black)
-    term.setCursorPos(3, H - 1)
-    term.setTextColor(colors.lightGray)
-    term.write(done .. ' / ' .. total .. ' files')
+    writeAt(3, y, string.rep(' ', width), colors.white, colors.gray)
+    if filled > 0 then
+        writeAt(3, y, string.rep(' ', filled), colors.white, fg or colors.cyan)
+    end
 end
 
-title()
-line('This will permanently delete every file on this computer.', colors.red)
-line('Old TouchOS files will be removed before installation.', colors.yellow)
-line('')
-line('Type WIPE to continue.', colors.white)
+header('TouchOS Setup', 'Fresh install')
+writeAt(2, 5, 'This installer performs a COMPLETE filesystem wipe.', colors.red)
+writeAt(2, 6, 'Nothing currently on this computer will survive.', colors.yellow)
+writeAt(2, 8, 'Before wiping, TouchOS will download and validate', colors.white)
+writeAt(2, 9, 'every release file so a network failure cannot leave', colors.white)
+writeAt(2, 10, 'the computer half-installed.', colors.white)
+
+if H >= 13 then
+    centered(12, 'Type WIPE to continue', colors.white)
+end
+term.setCursorPos(2, math.min(H, 14))
+term.setTextColor(colors.white)
 term.write('> ')
+
 if read() ~= 'WIPE' then
-    line('Cancelled.', colors.yellow)
+    clear()
+    centered(math.max(1, math.floor(H / 2)), 'Installation cancelled', colors.yellow)
     return
 end
 
-clear()
-line('Reformatting filesystem...', colors.cyan)
-local all = fs.list('/')
-for _, name in ipairs(all) do
-    pcall(fs.delete, '/' .. name)
-end
+header('TouchOS Setup', 'Downloading release')
+writeAt(2, 5, 'Downloading and validating files before wipe...', colors.cyan)
 
-fs.makeDir('/os')
-fs.makeDir('/apps')
-
-clear()
-line('Installing TouchOS', colors.cyan)
-line('')
-
-local installed = 0
+local bundles = {}
 local failed = {}
 
 for i, path in ipairs(FILES) do
-    term.setTextColor(colors.white)
-    term.write('[' .. string.rep(' ', math.max(0, 12 - #path)) .. '] ' .. path)
-    term.setCursorPos(1, math.min(H - 3, select(2, term.getCursorPos()) + 1))
+    local y = math.min(H - 3, 7 + ((i - 1) % math.max(1, H - 9)))
+    writeAt(2, y, 'FETCH  ' .. path, colors.white, colors.black)
 
     local response, err = http.get(BASE .. path)
+
     if not response then
         failed[#failed + 1] = path .. ': ' .. tostring(err or 'HTTP error')
-        term.setTextColor(colors.red)
-        term.write('FAILED')
+        writeAt(math.max(2, W - 7), y, 'FAILED', colors.red)
     else
         local data = response.readAll()
         response.close()
-        local file = fs.open('/' .. path, 'w')
-        if not file then
-            failed[#failed + 1] = path .. ': cannot write'
-            term.setTextColor(colors.red)
-            term.write('FAILED')
+
+        if type(data) ~= 'string' or #data == 0 then
+            failed[#failed + 1] = path .. ': empty response'
+            writeAt(math.max(2, W - 7), y, 'FAILED', colors.red)
         else
-            file.write(data)
-            file.close()
-            installed = installed + 1
-            term.setTextColor(colors.lime)
-            term.write('OK')
+            bundles[path] = data
+            writeAt(math.max(2, W - 7), y, 'OK', colors.lime)
         end
     end
 
-    progress(i, #FILES)
+    bar(H - 2, i, #FILES, colors.cyan)
+    writeAt(3, H - 1, 'Release check ' .. i .. '/' .. #FILES, colors.lightGray)
 end
 
-term.setBackgroundColor(colors.black)
-term.setCursorPos(1, math.max(1, H - 6))
-term.setTextColor(colors.white)
-
 if #failed > 0 then
-    line('')
-    line('Installation failed.', colors.red)
+    header('TouchOS Setup', 'Download failed')
+    writeAt(2, 5, 'Nothing was wiped.', colors.lime)
+    writeAt(2, 7, 'Fix the following problems and rerun:', colors.yellow)
+    local y = 8
     for _, err in ipairs(failed) do
-        line(err, colors.red)
+        if y >= H then break end
+        writeAt(2, y, err, colors.red)
+        y = y + 1
     end
-    line('Fix networking or storage and rerun the installer.', colors.yellow)
     return
 end
 
-line('')
-line('TouchOS installed successfully.', colors.lime)
-line('10 core files installed.', colors.white)
-line('Rebooting into TouchOS...', colors.cyan)
+header('TouchOS Setup', 'Reformatting')
+writeAt(2, 5, 'All existing files are being removed...', colors.red)
+
+local all = fs.list('/')
+local deleteFailed = {}
+
+for i, name in ipairs(all) do
+    local ok, err = pcall(fs.delete, '/' .. name)
+    if not ok then
+        deleteFailed[#deleteFailed + 1] = '/' .. name .. ': ' .. tostring(err)
+    end
+    bar(H - 2, i, #all, colors.red)
+end
+
+if #deleteFailed > 0 then
+    clear(colors.black)
+    centered(3, 'WIPE FAILED', colors.red)
+    writeAt(2, 5, 'Some files could not be deleted:', colors.yellow)
+    local y = 6
+    for _, err in ipairs(deleteFailed) do
+        if y >= H then break end
+        writeAt(2, y, err, colors.red)
+        y = y + 1
+    end
+    return
+end
+
+pcall(fs.makeDir, '/os')
+pcall(fs.makeDir, '/apps')
+
+header('TouchOS Setup', 'Installing release')
+writeAt(2, 5, 'Installing verified files...', colors.cyan)
+
+local installed = 0
+local writeFailed = {}
+
+for i, path in ipairs(FILES) do
+    local dir = fs.getDir('/' .. path)
+    if dir ~= '' and not fs.exists(dir) then
+        fs.makeDir(dir)
+    end
+
+    local file = fs.open('/' .. path, 'w')
+
+    if not file then
+        writeFailed[#writeFailed + 1] = path .. ': cannot open for writing'
+    else
+        local ok, err = pcall(function()
+            file.write(bundles[path])
+            file.close()
+        end)
+
+        if ok then
+            installed = installed + 1
+        else
+            pcall(file.close)
+            writeFailed[#writeFailed + 1] = path .. ': ' .. tostring(err)
+        end
+    end
+
+    local y = 7 + ((i - 1) % math.max(1, H - 10))
+    writeAt(2, y, 'INSTALL ' .. path, colors.white)
+    writeAt(math.max(2, W - 2), y, 'OK', colors.lime)
+    bar(H - 2, i, #FILES, colors.cyan)
+end
+
+if #writeFailed > 0 then
+    clear()
+    centered(3, 'INSTALL FAILED', colors.red)
+    writeAt(2, 5, installed .. '/' .. #FILES .. ' files installed', colors.yellow)
+    local y = 7
+    for _, err in ipairs(writeFailed) do
+        if y >= H then break end
+        writeAt(2, y, err, colors.red)
+        y = y + 1
+    end
+    return
+end
+
+clear()
+centered(math.max(2, math.floor(H / 2) - 2), 'TOUCHOS', colors.cyan)
+centered(math.max(3, math.floor(H / 2)), 'INSTALLATION COMPLETE', colors.lime)
+centered(math.max(4, math.floor(H / 2) + 2), installed .. ' files installed', colors.white)
+centered(math.max(5, math.floor(H / 2) + 4), 'Rebooting...', colors.lightBlue)
 sleep(2)
 os.reboot()
